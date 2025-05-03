@@ -49,6 +49,12 @@
         #printerImage {
             display: block;
             margin: 10px auto 0;
+            width: 300px; /* Set width for the div */
+            height: 100px; /* Set height for the div - adjust as needed */
+            background-image: url('printer.png'); /* Set background image */
+            background-repeat: no-repeat; /* Prevent tiling */
+            background-position: center; /* Center the image */
+            background-size: contain; /* Scale image to fit */
         }
     </style>
 </head>
@@ -62,8 +68,8 @@
         <input type="file" id="uploadImage" accept="image/*">
         <textarea id="message" placeholder="Text area with message"></textarea>
     </div>
-    <img id="printerImage" src="printer.png" 
-        width="800px" alt="Printer graphic">
+    <!-- Replaced img with div -->
+    <div id="printerImage"></div>
 
     <script>
         const canvas = document.getElementById('drawingCanvas');
