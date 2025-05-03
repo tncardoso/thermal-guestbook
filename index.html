@@ -15,12 +15,16 @@
         .receipt {
             background-color: #ffff99; /* Yellow background for thermal receipt look */
             padding: 10px;
+            padding-bottom: 50px; /* Added padding for the background image */
             border-radius: 5px;
             width: 300px;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 10px;
+            background-image: url('printer.png'); /* Added background image */
+            background-repeat: no-repeat; /* Prevent tiling */
+            background-position: bottom center; /* Position at bottom center */
         }
         canvas {
             border: 1px solid #000;
