@@ -45,7 +45,7 @@ class PrintRequest(BaseModel):
     # Allow None, but if present, limit length. Default to None if empty string is sent.
     title: Optional[str] = Field(default=None, max_length=40)
     # Image data URL is required, but content validation happens later
-    img: str
+    img: Optional[str]
     # Message is required (can be empty string), limit length
     msg: str = Field(max_length=180)
 
@@ -123,7 +123,7 @@ async def print_message(request: PrintRequest): # FastAPI validates length const
         client.publish("printer", msg.model_dump_json(), qos=2)
 
         logging.info("Published message to MQTT topic 'printer'")
-        return {"status": "success", "message": "Thank you for your message!"}
+        return {"status": "success", "message": "Thanks for your message!"}
 
     except HTTPException:
          # Re-raise HTTP exceptions (like validation errors from FastAPI or our custom ones)
