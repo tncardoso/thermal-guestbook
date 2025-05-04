@@ -1,7 +1,8 @@
 import sqlite3
 import logging
 from datetime import datetime
-from printer.model import Message # Assuming Message model is importable
+# Message model now includes ip_address field
+from printer.model import Message
 
 class DB:
     """
@@ -11,7 +12,7 @@ class DB:
     def __init__(self, db_path: str = "printer_messages.db"):
         """
         Initializes the database connection, sets journal mode to WAL,
-        and creates the messages table if it doesn't exist.
+        and creates/updates the messages table.
 
         Args:
             db_path: The path to the SQLite database file.
@@ -40,26 +41,43 @@ class DB:
     def _create_table(self):
         """
         Creates the 'messages' table if it doesn't already exist.
+        Adds the ip_address column if it's missing.
         """
         try:
+            # Create table with ip_address column if it doesn't exist
             self.cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     title TEXT,
                     img BLOB,
-                    msg TEXT
+                    msg TEXT,
+                    ip_address TEXT
                 )
             """)
-            self.conn.commit()
-            logging.info("Table 'messages' checked/created successfully.")
+            # Attempt to add the column if the table already exists (best effort)
+            try:
+                self.cursor.execute("ALTER TABLE messages ADD COLUMN ip_address TEXT;")
+                logging.info("Added 'ip_address' column to existing 'messages' table.")
+                self.conn.commit() # Commit alter table immediately
+            except sqlite3.OperationalError as e:
+                # Ignore error if column already exists
+                if "duplicate column name" in str(e).lower():
+                    pass # Column already exists, which is fine
+                else:
+                    logging.error(f"Database error trying to add ip_address column: {e}", exc_info=True)
+                    raise # Re-raise other operational errors
+
+            # No need to commit here again unless ALTER TABLE failed silently
+            # self.conn.commit()
+            logging.info("Table 'messages' checked/created/updated successfully.")
         except sqlite3.Error as e:
-            logging.error(f"Database error creating table: {e}", exc_info=True)
+            logging.error(f"Database error creating/updating table: {e}", exc_info=True)
             raise
 
     def insert(self, message: Message):
         """
-        Inserts a message into the database table.
+        Inserts a message into the database table, including the IP address.
 
         Args:
             message: A Message object containing the data to insert.
@@ -67,23 +85,29 @@ class DB:
         Returns:
             The row ID of the inserted message, or None if insertion fails.
         """
-        sql = "INSERT INTO messages (title, img, msg) VALUES (?, ?, ?)"
+        # Update SQL query to include ip_address
+        sql = "INSERT INTO messages (title, img, msg, ip_address) VALUES (?, ?, ?, ?)"
         try:
-            # Ensure img is bytes or None. Pydantic model might hold it as str if not handled upstream.
+            # Ensure img is bytes or None.
             img_data = message.img if isinstance(message.img, bytes) or message.img is None else None
             if message.img is not None and not isinstance(message.img, bytes):
                  logging.warning(f"Image data for insert was not bytes (type: {type(message.img)}), inserting NULL for image.")
 
+            # Get ip_address from the message object (defaults to None in model)
+            ip_addr = message.ip_address
 
-            self.cursor.execute(sql, (message.title, img_data, message.msg))
+            # Update parameters tuple to include ip_address
+            self.cursor.execute(sql, (message.title, img_data, message.msg, ip_addr))
             self.conn.commit()
             last_id = self.cursor.lastrowid
-            logging.info(f"Inserted message with ID: {last_id}")
+            logging.info(f"Inserted message with ID: {last_id} from IP: {ip_addr}")
             return last_id
         except sqlite3.Error as e:
             logging.error(f"Database error inserting message: {e}", exc_info=True)
             self.conn.rollback() # Rollback on error
             return None
+        # No longer need AttributeError check as ip_address is guaranteed by Pydantic model
+
 
     def count(self) -> int:
         """

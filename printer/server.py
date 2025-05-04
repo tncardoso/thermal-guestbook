@@ -12,7 +12,8 @@ from io import BytesIO
 # from escpos.printer import Usb
 from printer.model import Message
 import paho.mqtt.client as mqtt
-from fastapi import FastAPI, HTTPException
+# Import Request from FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from starlette.responses import FileResponse
 from pydantic import BaseModel, Field # Import Field
 from printer.log import init
@@ -44,7 +45,7 @@ app = FastAPI()
 class PrintRequest(BaseModel):
     # Allow None, but if present, limit length. Default to None if empty string is sent.
     title: Optional[str] = Field(default=None, max_length=40)
-    # Image data URL is required, but content validation happens later
+    # Image data URL is optional
     img: Optional[str]
     # Message is required (can be empty string), limit length
     msg: str = Field(max_length=180)
@@ -64,14 +65,19 @@ def font_hp100() -> FileResponse:
     # not using StaticFiles to be extra-safe
     return FileResponse("public/WebPlus_HP_100LX_6x8.woff")
 
+# Add Request to the function signature
 @app.post("/print")
-async def print_message(request: PrintRequest): # FastAPI validates length constraints from PrintRequest
+async def print_message(print_req: PrintRequest, req: Request): # FastAPI validates length constraints from PrintRequest
     try:
+        # Get client IP address
+        client_ip = req.client.host if req.client else "Unknown"
+        logging.info(f"Received print request from IP: {client_ip}")
+
         # --- Image Decoding ---
-        img_data = b""
-        if request.img and "," in request.img:
+        img_data = b"" # Default to empty bytes
+        if print_req.img and "," in print_req.img:
             try:
-                header, encoded = request.img.split(",", 1)
+                header, encoded = print_req.img.split(",", 1)
                 # Basic check if it looks like a PNG data URL header
                 if header.startswith("data:image/png;base64"):
                     img_data = base64.b64decode(encoded)
@@ -82,6 +88,10 @@ async def print_message(request: PrintRequest): # FastAPI validates length const
             except (ValueError, base64.binascii.Error) as decode_error:
                 logging.warning(f"Could not decode image base64 data: {decode_error}.")
                 raise HTTPException(status_code=400, detail="Invalid image base64 data.")
+        elif print_req.img is not None: # Handle case where img is present but not a valid data URL format
+             logging.warning("Received 'img' field but it was not a valid data URL format.")
+             # Treat as no image
+             img_data = None # Explicitly set to None if format is invalid
 
         # --- Image Dimension Validation ---
         if img_data: # Only validate if image data was successfully decoded
@@ -96,28 +106,32 @@ async def print_message(request: PrintRequest): # FastAPI validates length const
                             detail=f"Invalid image dimensions. Expected {EXPECTED_WIDTH}x{EXPECTED_HEIGHT}, but got {img.width}x{img.height}."
                         )
                     logging.info(f"Image dimensions validated: {img.width}x{img.height}")
+            except HTTPException:
+                 raise # Re-raise validation HTTPException
             except Exception as img_err: # Catch PIL errors (invalid format etc.)
                 logging.warning(f"Failed to process image data: {img_err}", exc_info=True)
                 raise HTTPException(status_code=400, detail="Invalid or corrupted image data.")
         else:
-            # If img field in request was present but resulted in empty img_data (e.g., empty data URL),
-            # you might want to decide if this is an error or acceptable.
-            # Currently, it proceeds without an image, which might be desired if only text/title is sent.
+            # If img field in request was present but resulted in empty img_data (e.g., empty data URL or invalid format handled above),
+            # log that we are proceeding without an image.
             logging.info("No valid image data provided or decoded, proceeding without image.")
+            img_data = None # Ensure img_data is None if no valid image
 
 
         # --- Prepare Message ---
         # Use provided title or a default if empty/None
         # Pydantic handles the None default, use "Web Print" if title is None or ""
-        print_title = request.title if request.title else "No Title Message"
+        print_title = print_req.title if print_req.title else "No Title Message"
 
         # Create the message object (Data lengths already validated by FastAPI/Pydantic)
+        # Add the client_ip here
         msg = Message(
             title=print_title,
-            img=img_data, # Use the validated (or empty) image data
-            msg=request.msg,
+            img=img_data, # Use the validated (or None) image data
+            msg=print_req.msg,
+            ip_address=client_ip # Add the IP address
         )
-        logging.info(f"Received print request: title='{print_title}', msg='{request.msg[:50]}...', img_size={len(img_data)} bytes") # Log truncated msg
+        logging.info(f"Prepared message: title='{print_title}', msg='{print_req.msg[:50]}...', img_size={len(img_data) if img_data else 0} bytes, ip={client_ip}")
 
         # --- Publish to MQTT ---
         client.publish("printer", msg.model_dump_json(), qos=2)
