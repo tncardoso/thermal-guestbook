@@ -17,6 +17,8 @@ from fastapi import FastAPI, HTTPException, Request
 from starlette.responses import FileResponse
 from pydantic import BaseModel, Field # Import Field
 from printer.log import init
+# Import the DB class
+from printer.db import DB
 
 # init log config
 init()
@@ -25,6 +27,15 @@ init()
 EXPECTED_WIDTH = 256
 EXPECTED_HEIGHT = 256
 # ---------------------------------
+
+# --- Initialize Database ---
+try:
+    db = DB() # Default path "printer_messages.db"
+    logging.info("Database connection established for server.")
+except Exception as e:
+    logging.critical(f"Failed to initialize database: {e}", exc_info=True)
+    import sys; sys.exit(1) # Exit if DB connection fails
+# ---------------------------
 
 def on_connect(client, userdata, flags, rc, props):
     if rc == 0:
@@ -146,4 +157,32 @@ async def print_message(print_req: PrintRequest, req: Request): # FastAPI valida
         # Catch any other unexpected errors during processing
         logging.error(f"Unexpected error processing print request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error processing print request.")
+
+# --- New Endpoint for Message Count ---
+@app.get("/count")
+async def get_message_count():
+    """
+    Returns the total number of messages stored in the database.
+    """
+    try:
+        count = db.count()
+        logging.debug(f"Retrieved message count: {count}")
+        return {"count": count}
+    except Exception as e:
+        logging.error(f"Error retrieving message count from database: {e}", exc_info=True)
+        # Return a 500 error if the database count fails
+        raise HTTPException(status_code=500, detail="Could not retrieve message count.")
+# --------------------------------------
+
+# --- Graceful Shutdown ---
+# Consider adding lifespan events for cleaner DB closing if needed,
+# but __del__ in DB class provides some safety.
+# @app.on_event("shutdown")
+# def shutdown_event():
+#     logging.info("Shutting down server...")
+#     if db:
+#         db.close()
+#     client.loop_stop()
+#     logging.info("MQTT client loop stopped.")
+# -------------------------
 

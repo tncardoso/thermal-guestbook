@@ -230,7 +230,8 @@
 <body>
     <h1 class="hp100">Print me a message!</h1>
     <div class="hp100 status">
-        <div id="circle" class="online"></div><div style="margin-left: 0.4em">online</div>
+        <div id="circle" class="online"></div>
+        <div style="margin-left: 0.4em">online (<span id="messageCount">...</span> printed)</div>
     </div>
     <div class="hp100 hero">
         Messages are printed in a thermal printer on my desk.<br />Use it wisely!
@@ -270,6 +271,7 @@
         const messageTextarea = document.getElementById('message');
         const printBtn = document.getElementById('printBtn');
         const messageCharCount = document.getElementById('messageCharCount');
+        const messageCountSpan = document.getElementById('messageCount'); // Get the span for count
 
         // --- Modal Elements ---
         const resultModal = document.getElementById('resultModal');
@@ -512,6 +514,8 @@
                 console.log('Print request successful:', result);
                 // Show success modal
                 showModal(result.message || 'Print job sent successfully!', true);
+                // Fetch count immediately after successful print
+                fetchAndUpdateCount();
 
             } catch (error) {
                 console.error('Error sending print request:', error);
@@ -535,6 +539,30 @@
             }
             return true; // All pixels are white
         }
+
+        // --- Fetch and Update Message Count ---
+        async function fetchAndUpdateCount() {
+            try {
+                const response = await fetch('/count');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (typeof data.count === 'number') {
+                    messageCountSpan.textContent = data.count;
+                } else {
+                    messageCountSpan.textContent = '?'; // Indicate unknown count
+                    console.warn('Received invalid count data:', data);
+                }
+            } catch (error) {
+                console.error('Error fetching message count:', error);
+                messageCountSpan.textContent = 'err'; // Indicate error fetching count
+            }
+        }
+
+        // Fetch the count initially and then every 2 seconds
+        fetchAndUpdateCount();
+        setInterval(fetchAndUpdateCount, 2000);
 
     </script>
 </body>
