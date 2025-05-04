@@ -12,8 +12,9 @@ IN_EP = 0x81
 OUT_EP = 0x03
 PROFILE = "NT-5890K"
 
-dry_run = False
-db_instance = None # Global variable to hold the DB instance
+# Removed global variables:
+# dry_run = False
+# db_instance = None
 
 def send_to_printer(msg: Message):
     try:
@@ -57,7 +58,10 @@ def on_connect(client, userdata, flags, rc, props):
         import sys; sys.exit(1)
 
 def on_message(client, userdata, raw_msg):
-    global db_instance # Access the global DB instance
+    # Access db_instance and dry_run from userdata dictionary
+    db_instance = userdata.get('db')
+    dry_run = userdata.get('dry_run', False) # Default to False if not found
+
     try:
         msg = Message.model_validate_json(raw_msg.payload)
         logging.info(f"Received message via MQTT: '{msg.title}'")
@@ -72,7 +76,7 @@ def on_message(client, userdata, raw_msg):
                 # Log error, but continue to print attempt
                 logging.error(f"Failed to save message '{msg.title}' to database.")
         else:
-            logging.warning("DB instance not available, skipping database save.")
+            logging.warning("DB instance not available in userdata, skipping database save.")
 
         # --- Send to Printer ---
         logging.info(f"Attempting to print message: '{msg.title}'")
@@ -87,8 +91,9 @@ def on_message(client, userdata, raw_msg):
 
 
 def main():
-    global dry_run
-    global db_instance # Declare intent to modify the global variable
+    # No longer need global declarations here
+    # global dry_run
+    # global db_instance
 
     from printer.log import init
     init() # Initialize logging
@@ -105,17 +110,20 @@ def main():
     args = parser.parse_args()
 
     logging.info("Starting Printer Worker...")
+    # Local variable for dry_run status
+    dry_run_status = False
     if args.dry:
         logging.warning("Dry run mode enabled. Messages will not be sent to the printer.")
-        dry_run = True
+        dry_run_status = True
 
     # --- Initialize Database ---
+    db_instance = None # Initialize local db_instance to None
     try:
         logging.info(f"Initializing database connection to: {args.db_path}")
         db_instance = DB(db_path=args.db_path)
     except Exception as e:
         logging.error(f"Failed to initialize database: {e}. Worker will run without DB.", exc_info=True)
-        # db_instance remains None, on_message will handle this
+        # db_instance remains None
 
     # --- Initialize MQTT Client ---
     logging.info(f"Connecting to MQTT broker at {args.mqtt_broker}:{args.mqtt_port}...")
@@ -123,8 +131,9 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
 
-    # Set userdata to carry db_instance if needed in callbacks (alternative to global)
-    # client.user_data_set({'db': db_instance, 'dry_run': dry_run})
+    # Set userdata to carry db_instance and dry_run status
+    user_data = {'db': db_instance, 'dry_run': dry_run_status}
+    client.user_data_set(user_data)
 
     try:
         client.connect(args.mqtt_broker, args.mqtt_port)
@@ -133,8 +142,10 @@ def main():
         logging.fatal(f"Failed to connect or run MQTT client loop: {e}", exc_info=True)
     finally:
         logging.info("Shutting down Printer Worker...")
+        # Close DB connection if it was successfully created
         if db_instance:
             db_instance.close()
+        # Stop MQTT client
         client.loop_stop() # Stop the network loop if loop_forever was interrupted
         client.disconnect()
         logging.info("MQTT client disconnected.")
