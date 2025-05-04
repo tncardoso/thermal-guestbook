@@ -6,6 +6,7 @@ class Message(BaseModel):
     title: str
     img: Optional[bytes]
     msg: str
+    ip_address: Optional[str] = None # Added IP address field
 
     def strip_accents(self, text: str) -> str:
         text = unicodedata.normalize('NFD', text)
@@ -23,5 +24,4 @@ class Message(BaseModel):
         ser_json_bytes="base64",
         val_json_bytes="base64",
     )
-
 
