@@ -111,10 +111,8 @@ def main():
 
     logging.info("Starting Printer Worker...")
     # Local variable for dry_run status
-    dry_run_status = False
     if args.dry:
         logging.warning("Dry run mode enabled. Messages will not be sent to the printer.")
-        dry_run_status = True
 
     # --- Initialize Database ---
     db_instance = None # Initialize local db_instance to None
@@ -132,7 +130,7 @@ def main():
     client.on_message = on_message
 
     # Set userdata to carry db_instance and dry_run status
-    user_data = {'db': db_instance, 'dry_run': dry_run_status}
+    user_data = {'db': db_instance, 'dry_run': args.dry}
     client.user_data_set(user_data)
 
     try:
