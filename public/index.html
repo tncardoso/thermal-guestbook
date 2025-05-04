@@ -54,7 +54,7 @@
         }
 
         .tear {
-            background-color: #E7F345; 
+            background-color: #E7F345;
             width: 100%;
             padding-top: 10px;
             padding-bottom: 20px;
@@ -148,8 +148,8 @@
             opacity: 0.0;
 
             -webkit-animation: pulsate 1000ms ease-out;
-            -webkit-animation-iteration-count: infinite; 
-                
+            -webkit-animation-iteration-count: infinite;
+
             -webkit-transition: background-color 300ms linear;
             -moz-transition: background-color 300ms linear;
             -o-transition: background-color 300ms linear;
@@ -462,17 +462,18 @@
 
         // Print button functionality
         printBtn.addEventListener('click', async () => {
-            const imageDataUrl = canvas.toDataURL('image/png');
             const title = titleInput.value;
             const message = messageTextarea.value;
-
-            // Frontend validation (maxlength attributes handle length)
             const canvasIsEmpty = isCanvasEmpty();
+
+            // Frontend validation: Ensure at least one field has content
             if (!title && !message && canvasIsEmpty) {
-                // Use modal for validation error too
                 showModal('Please provide a title, message, or draw something to print.', false);
                 return;
             }
+
+            // Determine image data: null if empty, data URL otherwise
+            const imageDataToSend = canvasIsEmpty ? null : canvas.toDataURL('image/png');
 
             console.log("Sending print request...");
             printBtn.disabled = true;
@@ -486,7 +487,7 @@
                     },
                     body: JSON.stringify({
                         title: title,
-                        img: imageDataUrl,
+                        img: imageDataToSend, // Use the conditional image data
                         msg: message,
                     }),
                 });
