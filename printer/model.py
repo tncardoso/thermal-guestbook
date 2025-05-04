@@ -1,9 +1,10 @@
 import unicodedata
 from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Optional
 
 class Message(BaseModel):
     title: str
-    img: bytes
+    img: Optional[bytes]
     msg: str
 
     def strip_accents(self, text: str) -> str:
