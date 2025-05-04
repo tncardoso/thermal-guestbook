@@ -104,7 +104,7 @@ async def print_message(request: PrintRequest): # FastAPI validates length const
         # --- Prepare Message ---
         # Use provided title or a default if empty/None
         # Pydantic handles the None default, use "Web Print" if title is None or ""
-        print_title = request.title if request.title else "Web Print"
+        print_title = request.title if request.title else "No Title Message"
 
         # Create the message object (Data lengths already validated by FastAPI/Pydantic)
         msg = Message(
@@ -118,7 +118,7 @@ async def print_message(request: PrintRequest): # FastAPI validates length const
         client.publish("printer", msg.model_dump_json(), qos=2)
 
         logging.info("Published message to MQTT topic 'printer'")
-        return {"status": "success", "message": "Print job sent"}
+        return {"status": "success", "message": "Thank you for your message!"}
 
     except HTTPException:
          # Re-raise HTTP exceptions (like validation errors from FastAPI or our custom ones)
