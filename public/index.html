@@ -100,12 +100,66 @@
             background-size: cover; /* Scale image to fit */
             z-index: -1;
         }
+
+        /* --- Modal Styles --- */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 400px; /* Maximum width */
+            border-radius: 5px;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+        }
+
+        .close-btn {
+            color: #aaa;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-btn:hover,
+        .close-btn:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        /* Style for success/error messages */
+        .modal-message.success {
+            color: green;
+        }
+        .modal-message.error {
+            color: red;
+        }
+
     </style>
 </head>
 <body>
     <h1>Print me a message!</h1>
     <div class="receipt">
-        <input type="text" id="titleInput" placeholder="Enter title here..." maxlength="40"> <!-- Added maxlength -->
+        <input type="text" id="titleInput" placeholder="Enter title here..." maxlength="40">
         <canvas id="drawingCanvas" width="256" height="256"></canvas>
         <div class="buttons">
             <button id="pencilBtn">✏️</button>
@@ -113,12 +167,19 @@
             <button id="clearBtn">🗑️</button>
         </div>
         <input type="file" id="uploadImage" accept="image/*">
-        <textarea id="message" placeholder="Enter your message here..." maxlength="180"></textarea> <!-- Added maxlength -->
-        <span id="messageCharCount" class="char-counter">0 / 180</span> <!-- Added char counter display -->
+        <textarea id="message" placeholder="Enter your message here..." maxlength="180"></textarea>
+        <span id="messageCharCount" class="char-counter">0 / 180</span>
         <button id="printBtn">Print!</button>
     </div>
-    <!-- Replaced img with div -->
     <div id="printerImage"></div>
+
+    <!-- The Modal -->
+    <div id="resultModal" class="modal">
+      <div class="modal-content">
+        <span id="closeModalBtn" class="close-btn">&times;</span>
+        <p id="modalMessage" class="modal-message"></p>
+      </div>
+    </div>
 
     <script>
         const canvas = document.getElementById('drawingCanvas');
@@ -130,9 +191,14 @@
         const titleInput = document.getElementById('titleInput');
         const messageTextarea = document.getElementById('message');
         const printBtn = document.getElementById('printBtn');
-        const messageCharCount = document.getElementById('messageCharCount'); // Get char counter span
+        const messageCharCount = document.getElementById('messageCharCount');
 
-        const MESSAGE_MAX_LENGTH = 180; // Define max length constant
+        // --- Modal Elements ---
+        const resultModal = document.getElementById('resultModal');
+        const modalMessage = document.getElementById('modalMessage');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        const MESSAGE_MAX_LENGTH = 180;
 
         let drawing = false;
         let isPencil = true;
@@ -279,6 +345,43 @@
             }
         });
 
+        // --- Modal Functions ---
+        function showModal(message, isSuccess) {
+            modalMessage.textContent = message;
+            modalMessage.className = 'modal-message'; // Reset class
+            if (isSuccess) {
+                modalMessage.classList.add('success');
+                clearForm(); // Clear form on success
+            } else {
+                modalMessage.classList.add('error');
+            }
+            resultModal.style.display = "block";
+        }
+
+        function hideModal() {
+            resultModal.style.display = "none";
+        }
+
+        // Close modal when the close button is clicked
+        closeModalBtn.onclick = hideModal;
+
+        // Close modal when clicking outside the modal content
+        window.onclick = function(event) {
+            if (event.target == resultModal) {
+                hideModal();
+            }
+        }
+
+        // --- Form Clearing Function ---
+        function clearForm() {
+            titleInput.value = '';
+            messageTextarea.value = '';
+            clearBtn.click(); // Simulate clear button click for canvas
+            updateMessageCharCount(); // Reset counter
+            uploadImage.value = ''; // Clear file input selection
+        }
+
+
         // Print button functionality
         printBtn.addEventListener('click', async () => {
             const imageDataUrl = canvas.toDataURL('image/png');
@@ -288,7 +391,8 @@
             // Frontend validation (maxlength attributes handle length)
             const canvasIsEmpty = isCanvasEmpty();
             if (!title && !message && canvasIsEmpty) {
-                alert('Please provide a title, message, or draw something to print.');
+                // Use modal for validation error too
+                showModal('Please provide a title, message, or draw something to print.', false);
                 return;
             }
 
@@ -313,34 +417,27 @@
                     const errorData = await response.json();
                     // Check for FastAPI validation errors
                     if (response.status === 422 && errorData.detail) {
-                         // Extract specific validation messages if needed, or show generic one
                          let errorMsg = "Validation error. ";
                          try {
-                             // Attempt to format FastAPI validation errors
                              errorMsg += errorData.detail.map(err => `${err.loc[1]}: ${err.msg}`).join('; ');
                          } catch (e) {
-                             // Fallback for unexpected error format
                              errorMsg += JSON.stringify(errorData.detail);
                          }
                          throw new Error(errorMsg);
-                    } else {
+                    } else { // Handle other HTTP errors (like 400 from image validation)
                         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
                     }
                 }
 
                 const result = await response.json();
                 console.log('Print request successful:', result);
-                alert('Print job sent successfully!');
-
-                // Optionally clear fields after successful print
-                // titleInput.value = '';
-                // messageTextarea.value = '';
-                // clearBtn.click();
-                // updateMessageCharCount(); // Reset counter if clearing
+                // Show success modal
+                showModal(result.message || 'Print job sent successfully!', true);
 
             } catch (error) {
                 console.error('Error sending print request:', error);
-                alert(`Failed to send print job: ${error.message}`);
+                // Show error modal
+                showModal(`Failed to send print job: ${error.message}`, false);
             } finally {
                  printBtn.disabled = false;
                  printBtn.textContent = "Print!";
