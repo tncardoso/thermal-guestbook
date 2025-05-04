@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drawing App</title>
+    <title>Print me a message!</title>
     <style>
         @font-face {
 	    font-family: ibm;
@@ -29,9 +29,49 @@
         }
 
         h1 {
-            font-family: hp100;
             margin-top: 2em;
             margin-bottom: 2em;
+        }
+
+        .hp100 {
+            font-family: hp100;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2em;
+        }
+
+        .status-child: {
+            flex: 1;
+        }
+
+        .hero {
+            max-width: 500px;
+            text-align: center;
+            margin-bottom: 4em;
+        }
+
+        .tear {
+            background-color: #E7F345; 
+            width: 100%;
+            padding-top: 10px;
+            padding-bottom: 20px;
+            margin-top: -40px;
+            text-align: center;
+            /* Scalloped edge using clip-path at the top */
+            clip-path: polygon(
+                0 20px,
+                5% 0, 10% 20px, 15% 0, 20% 20px,
+                25% 0, 30% 20px, 35% 0, 40% 20px,
+                45% 0, 50% 20px, 55% 0, 60% 20px,
+                65% 0, 70% 20px, 75% 0, 80% 20px,
+                85% 0, 90% 20px, 95% 0,
+                100% 20px,
+                100% 100%,
+                0 100%
+            );
         }
 
         .receipt {
@@ -101,6 +141,37 @@
             z-index: -1;
         }
 
+        #circle{
+            height:1.2rem;
+            width:1.2rem;
+            border-radius: 4rem;
+            opacity: 0.0;
+
+            -webkit-animation: pulsate 1000ms ease-out;
+            -webkit-animation-iteration-count: infinite; 
+                
+            -webkit-transition: background-color 300ms linear;
+            -moz-transition: background-color 300ms linear;
+            -o-transition: background-color 300ms linear;
+            -ms-transition: background-color 300ms linear;
+            transition: background-color 300ms linear;
+        }
+
+        @-webkit-keyframes pulsate {
+            0% {opacity: 0.3;}
+            40% {opacity: 1.0;}
+            60% {opacity: 1.0;}
+            100% {opacity: 0.3;}
+        }
+
+        .offline{
+            background: red;
+        }
+
+        .online{
+            background: #00cc00;
+        }
+
         /* --- Modal Styles --- */
         .modal {
             display: none; /* Hidden by default */
@@ -157,9 +228,16 @@
     </style>
 </head>
 <body>
-    <h1>Print me a message!</h1>
+    <h1 class="hp100">Print me a message!</h1>
+    <div class="hp100 status">
+        <div id="circle" class="online"></div><div style="margin-left: 0.4em">online</div>
+    </div>
+    <div class="hp100 hero">
+        Messages are printed in a thermal printer on my desk.<br />Use it wisely!
+    </div>
     <div class="receipt">
-        <input type="text" id="titleInput" placeholder="Enter title here..." maxlength="40">
+        <div class="tear"></div>
+        <input type="text" id="titleInput" placeholder="Title" maxlength="40">
         <canvas id="drawingCanvas" width="256" height="256"></canvas>
         <div class="buttons">
             <button id="pencilBtn">✏️</button>
@@ -167,7 +245,7 @@
             <button id="clearBtn">🗑️</button>
         </div>
         <input type="file" id="uploadImage" accept="image/*">
-        <textarea id="message" placeholder="Enter your message here..." maxlength="180"></textarea>
+        <textarea id="message" placeholder="Message" maxlength="180"></textarea>
         <span id="messageCharCount" class="char-counter">0 / 180</span>
         <button id="printBtn">Print!</button>
     </div>

@@ -59,6 +59,11 @@ def printer_png() -> FileResponse:
     # not using StaticFiles to be extra-safe
     return FileResponse("public/printer.png")
 
+@app.get("/WebPlus_HP_100LX_6x8.woff")
+def font_hp100() -> FileResponse:
+    # not using StaticFiles to be extra-safe
+    return FileResponse("public/WebPlus_HP_100LX_6x8.woff")
+
 @app.post("/print")
 async def print_message(request: PrintRequest): # FastAPI validates length constraints from PrintRequest
     try:
