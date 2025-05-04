@@ -62,22 +62,10 @@ async def print_message(request: PrintRequest):
 
         # Publish to MQTT
         client.publish("printer", msg.model_dump_json(), qos=2)
-        logging.info("Published message to MQTT topic 'printer'")
 
+        logging.info("Published message to MQTT topic 'printer'")
         return {"status": "success", "message": "Print job sent"}
     except Exception as e:
         logging.error(f"Error processing print request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process print request: {e}")
-
-# Removed the old /send route as it's replaced by /print
-# @app.get("/send")
-# def send():
-#     img_data = open("download.png", "rb").read()
-#     msg = Message(
-#         title="Hello world!",
-#         img=img_data,
-#         msg="here a short tweet I want to share!",
-#     )
-#     print(msg.model_dump_json())
-#     client.publish("printer", msg.model_dump_json(), qos=2)
 

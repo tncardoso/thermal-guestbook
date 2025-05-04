@@ -11,6 +11,8 @@ IN_EP = 0x81
 OUT_EP = 0x03
 PROFILE = "NT-5890K"
 
+dry_run = False
+
 def send_to_printer(msg: Message):
     printer = Usb(VENDOR_ID, PRODUCT_ID, in_ep=IN_EP, out_ep=OUT_EP, profile=PROFILE)
     printer.ln()
@@ -38,23 +40,28 @@ def on_connect(client, userdata, flags, rc, props):
 def on_message(client, userdata, raw_msg):
     msg = Message.model_validate_json(raw_msg.payload)
     logging.info(f"Printing message: '{msg.title}'")
-    #send_to_printer(msg)
-    import time; time.sleep(1)
+    if not dry_run:
+        send_to_printer(msg)
+    else:
+        logging.info("DRY RUN: printer would be called")
 
 def main():
+    global dry_run
+
     from printer.log import init
     init()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mqtt-client-id", type=str, default="printer",
-                        help="MQTT client id")
     parser.add_argument("--mqtt-broker", type=str, default="127.0.0.1",
                         help="MQTT broker")
     parser.add_argument("--mqtt-port", type=int, default=1883,
                         help="MQTT port")
+    parser.add_argument("--dry", default=False, action="store_true",
+                        help="Dry run, do not print")
     args = parser.parse_args()
 
     logging.info("Connecting to MQTT broker...")
+    dry_run = args.dry
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_connect = on_connect
     client.on_message = on_message
