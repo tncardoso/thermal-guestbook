@@ -16,13 +16,19 @@ dry_run = False
 def send_to_printer(msg: Message):
     printer = Usb(VENDOR_ID, PRODUCT_ID, in_ep=IN_EP, out_ep=OUT_EP, profile=PROFILE)
     printer.ln()
-    printer.set(bold=True)
+    printer.set(bold=True, align="center")
     printer.text(msg.title_ascii)
-    printer.set(bold=False)
-    printer.ln(3)
-    printer.image(io.BytesIO(msg.img), center=True)
-    printer.ln(2)
-    printer.text(msg.msg_ascii)
+    printer.ln()
+
+    if msg.img != None:
+        printer.ln(2)
+        printer.image(io.BytesIO(msg.img), center=True)
+
+    if msg.msg.strip() != "":
+        printer.ln(2)
+        printer.set(bold=False, align="left")
+        printer.text(msg.msg_ascii)
+
     printer.ln(2)
     printer.text("-" * 30)
     printer.ln(2)
