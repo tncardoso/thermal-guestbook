@@ -1,6 +1,7 @@
 import io
 import logging
 import argparse
+from typing import Optional # Import Optional
 from escpos.printer import Usb
 from printer.model import Message
 from printer.db import DB  # Import the DB class
@@ -16,12 +17,23 @@ PROFILE = "NT-5890K"
 # dry_run = False
 # db_instance = None
 
-def send_to_printer(msg: Message):
+# Modify function signature to accept message_id
+def send_to_printer(msg: Message, message_id: Optional[int]):
+    """Sends the formatted message to the USB thermal printer."""
     try:
         printer = Usb(VENDOR_ID, PRODUCT_ID, in_ep=IN_EP, out_ep=OUT_EP, profile=PROFILE)
         printer.ln()
         printer.set(bold=True, align="center")
-        printer.text(msg.title_ascii)
+
+        # Construct the title string with optional ID prefix
+        print_title = msg.title_ascii
+        if message_id is not None:
+            print_title = f"#{message_id}. {msg.title_ascii}"
+            logging.info(f"Printing title with ID: '{print_title}'")
+        else:
+            logging.info(f"Printing title without ID: '{print_title}' (DB insert might have failed)")
+
+        printer.text(print_title) # Use the constructed title
         printer.ln()
 
         # Ensure msg.img is bytes if not None before creating BytesIO
@@ -43,9 +55,9 @@ def send_to_printer(msg: Message):
         printer.buzzer()
         #printer.cut()
         printer.close()
-        logging.info(f"Successfully sent message '{msg.title}' to printer.")
+        logging.info(f"Successfully sent message ID {message_id if message_id else '(unknown)'} ('{msg.title}') to printer.")
     except Exception as e:
-        logging.error(f"Failed to print message '{msg.title}': {e}", exc_info=True)
+        logging.error(f"Failed to print message ID {message_id if message_id else '(unknown)'} ('{msg.title}'): {e}", exc_info=True)
 
 
 def on_connect(client, userdata, flags, rc, props):
@@ -61,29 +73,34 @@ def on_message(client, userdata, raw_msg):
     # Access db_instance and dry_run from userdata dictionary
     db_instance = userdata.get('db')
     dry_run = userdata.get('dry_run', False) # Default to False if not found
+    insert_id: Optional[int] = None # Initialize insert_id to None
 
     try:
         msg = Message.model_validate_json(raw_msg.payload)
-        logging.info(f"Received message via MQTT: '{msg.title}'")
+        logging.info(f"Received message via MQTT: '{msg.title}' from IP: {msg.ip_address}")
 
         # --- Save to Database ---
         if db_instance:
             logging.info(f"Attempting to save message '{msg.title}' to database...")
+            # Capture the returned ID
             insert_id = db_instance.insert(msg)
             if insert_id is not None:
                 logging.success(f"Message '{msg.title}' saved to database with ID: {insert_id}")
             else:
                 # Log error, but continue to print attempt
-                logging.error(f"Failed to save message '{msg.title}' to database.")
+                logging.error(f"Failed to save message '{msg.title}' to database. ID will not be printed.")
         else:
             logging.warning("DB instance not available in userdata, skipping database save.")
 
         # --- Send to Printer ---
-        logging.info(f"Attempting to print message: '{msg.title}'")
+        logging.info(f"Attempting to print message: '{msg.title}' (ID: {insert_id if insert_id else 'N/A'})")
         if not dry_run:
-            send_to_printer(msg)
+            # Pass the insert_id (which might be None) to the printer function
+            send_to_printer(msg, insert_id)
         else:
-            logging.info(f"DRY RUN: Printer function would be called for message '{msg.title}'.")
+            # Construct the potential title for logging even in dry run
+            dry_run_title = f"#{insert_id}. {msg.title_ascii}" if insert_id is not None else msg.title_ascii
+            logging.info(f"DRY RUN: Printer function would be called for message '{dry_run_title}'.")
 
     except Exception as e:
         # Catch errors during message validation or processing
