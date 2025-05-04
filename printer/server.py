@@ -4,6 +4,7 @@ import uvicorn
 import logging
 import base64
 from pathlib import Path
+from typing import Optional # Import Optional
 from escpos.printer import Usb
 from printer.model import Message
 import paho.mqtt.client as mqtt
@@ -32,6 +33,7 @@ app = FastAPI()
 
 # Pydantic model for the print request body
 class PrintRequest(BaseModel):
+    title: Optional[str] = None # Add optional title field
     img: str  # Base64 encoded image data URL (e.g., data:image/png;base64,...)
     msg: str
 
@@ -49,16 +51,26 @@ def printer_png() -> FileResponse:
 async def print_message(request: PrintRequest):
     try:
         # Extract base64 data from the data URL
-        header, encoded = request.img.split(",", 1)
-        img_data = base64.b64decode(encoded)
+        # Handle cases where the image might be empty (e.g., just text/title sent)
+        img_data = b"" # Default to empty bytes
+        if request.img and "," in request.img:
+            try:
+                header, encoded = request.img.split(",", 1)
+                img_data = base64.b64decode(encoded)
+            except (ValueError, base64.binascii.Error) as decode_error:
+                logging.warning(f"Could not decode image data URL: {decode_error}. Proceeding without image.")
+                # Keep img_data as empty bytes
+
+        # Use provided title or a default if empty/None
+        print_title = request.title if request.title else "Web Print"
 
         # Create the message object
         msg = Message(
-            title="Web Print", # You might want to make the title dynamic later
+            title=print_title, # Use the received or default title
             img=img_data,
             msg=request.msg,
         )
-        logging.info(f"Received print request: msg='{request.msg}', img_size={len(img_data)} bytes")
+        logging.info(f"Received print request: title='{print_title}', msg='{request.msg}', img_size={len(img_data)} bytes")
 
         # Publish to MQTT
         client.publish("printer", msg.model_dump_json(), qos=2)

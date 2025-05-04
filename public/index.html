@@ -65,13 +65,18 @@
         input[type="file"] {
             padding: 5px;
         }
+        input[type="text"], /* Style the text input */
         textarea {
-            width: 256px;
-            height: 100px;
+            width: 256px; /* Match canvas width */
             border: 1px solid #000;
             background-color: #fff;
-            padding: 5px; /* Added padding */
+            padding: 5px;
             box-sizing: border-box; /* Include padding in width/height */
+            font-family: inherit; /* Use body font */
+            font-size: inherit;
+        }
+        textarea {
+            height: 100px;
         }
         #printerImage {
             display: block;
@@ -91,6 +96,7 @@
 <body>
     <h1>Print me a message!</h1>
     <div class="receipt">
+        <input type="text" id="titleInput" placeholder="Enter title here..."> <!-- Added title input -->
         <canvas id="drawingCanvas" width="256" height="256"></canvas>
         <div class="buttons">
             <button id="pencilBtn">✏️</button>
@@ -99,7 +105,7 @@
         </div>
         <input type="file" id="uploadImage" accept="image/*">
         <textarea id="message" placeholder="Enter your message here..."></textarea>
-        <button id="printBtn">Print!</button> <!-- Added id="printBtn" -->
+        <button id="printBtn">Print!</button>
     </div>
     <!-- Replaced img with div -->
     <div id="printerImage"></div>
@@ -111,8 +117,9 @@
         const eraserBtn = document.getElementById('eraserBtn');
         const clearBtn = document.getElementById('clearBtn');
         const uploadImage = document.getElementById('uploadImage');
-        const messageTextarea = document.getElementById('message'); // Get textarea
-        const printBtn = document.getElementById('printBtn'); // Get print button
+        const titleInput = document.getElementById('titleInput'); // Get title input
+        const messageTextarea = document.getElementById('message');
+        const printBtn = document.getElementById('printBtn');
 
         let drawing = false;
         let isPencil = true;
@@ -245,10 +252,6 @@
                             }
                         }
                     }
-
-                    // No need to clamp as we are setting directly to 0 or 255 after error distribution affects the *next* pixel's old value.
-                    // The distributed error might push values outside 0-255 temporarily before they are thresholded.
-
                     ctx.putImageData(imageData, 0, 0);
                 };
                 img.src = URL.createObjectURL(file);
@@ -258,16 +261,15 @@
         // Print button functionality
         printBtn.addEventListener('click', async () => {
             const imageDataUrl = canvas.toDataURL('image/png'); // Get canvas as PNG data URL
+            const title = titleInput.value; // Get title value
             const message = messageTextarea.value;
 
-            // Basic validation
-            if (!message && !isCanvasEmpty()) {
-                 // Allow printing only image if message is empty but canvas is not
-            } else if (!message && isCanvasEmpty()) {
-                alert('Please draw something or enter a message to print.');
+            // Basic validation: Allow printing if there's a title, message, or non-empty canvas
+            const canvasIsEmpty = isCanvasEmpty();
+            if (!title && !message && canvasIsEmpty) {
+                alert('Please provide a title, message, or draw something to print.');
                 return;
             }
-
 
             console.log("Sending print request...");
             printBtn.disabled = true; // Disable button while sending
@@ -280,6 +282,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
+                        title: title, // Include title in payload
                         img: imageDataUrl,
                         msg: message,
                     }),
@@ -293,6 +296,11 @@
                 const result = await response.json();
                 console.log('Print request successful:', result);
                 alert('Print job sent successfully!'); // Optional: give user feedback
+
+                // Optionally clear fields after successful print
+                // titleInput.value = '';
+                // messageTextarea.value = '';
+                // clearBtn.click(); // Simulate clear button click
 
             } catch (error) {
                 console.error('Error sending print request:', error);
