@@ -4,13 +4,13 @@ import uvicorn
 import logging
 import base64
 from pathlib import Path
-from typing import Optional # Import Optional
+from typing import Optional
 from escpos.printer import Usb
 from printer.model import Message
 import paho.mqtt.client as mqtt
 from fastapi import FastAPI, HTTPException
 from starlette.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field # Import Field
 from printer.log import init
 
 # init log config
@@ -31,11 +31,14 @@ client.loop_start()
 
 app = FastAPI()
 
-# Pydantic model for the print request body
+# Pydantic model for the print request body with validation
 class PrintRequest(BaseModel):
-    title: Optional[str] = None # Add optional title field
-    img: str  # Base64 encoded image data URL (e.g., data:image/png;base64,...)
-    msg: str
+    # Allow None, but if present, limit length. Default to None if empty string is sent.
+    title: Optional[str] = Field(default=None, max_length=40)
+    # Image data URL is required, but content validation happens later
+    img: str
+    # Message is required (can be empty string), limit length
+    msg: str = Field(max_length=180)
 
 @app.get("/")
 def index() -> FileResponse:
@@ -48,35 +51,43 @@ def printer_png() -> FileResponse:
     return FileResponse("public/printer.png")
 
 @app.post("/print")
-async def print_message(request: PrintRequest):
+async def print_message(request: PrintRequest): # FastAPI now validates request against PrintRequest model
     try:
         # Extract base64 data from the data URL
-        # Handle cases where the image might be empty (e.g., just text/title sent)
-        img_data = b"" # Default to empty bytes
+        img_data = b""
         if request.img and "," in request.img:
             try:
                 header, encoded = request.img.split(",", 1)
-                img_data = base64.b64decode(encoded)
+                # Basic check if it looks like a PNG data URL header
+                if header.startswith("data:image/png;base64"):
+                    img_data = base64.b64decode(encoded)
+                else:
+                    logging.warning(f"Received image data URL with unexpected header: {header[:30]}...")
+                    # Decide if you want to reject or proceed without image
+                    # Proceeding without image for now
             except (ValueError, base64.binascii.Error) as decode_error:
                 logging.warning(f"Could not decode image data URL: {decode_error}. Proceeding without image.")
-                # Keep img_data as empty bytes
 
         # Use provided title or a default if empty/None
+        # Pydantic handles the None default, use "Web Print" if title is None or ""
         print_title = request.title if request.title else "Web Print"
 
-        # Create the message object
+        # Create the message object (Data is already validated by FastAPI/Pydantic)
         msg = Message(
-            title=print_title, # Use the received or default title
+            title=print_title,
             img=img_data,
-            msg=request.msg,
+            msg=request.msg, # Already validated for length
         )
-        logging.info(f"Received print request: title='{print_title}', msg='{request.msg}', img_size={len(img_data)} bytes")
+        logging.info(f"Received print request: title='{print_title}', msg='{request.msg[:50]}...', img_size={len(img_data)} bytes") # Log truncated msg
 
         # Publish to MQTT
         client.publish("printer", msg.model_dump_json(), qos=2)
 
         logging.info("Published message to MQTT topic 'printer'")
         return {"status": "success", "message": "Print job sent"}
+    except HTTPException:
+         # Re-raise HTTP exceptions (like validation errors from FastAPI)
+         raise
     except Exception as e:
         logging.error(f"Error processing print request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process print request: {e}")

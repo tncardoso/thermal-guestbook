@@ -77,6 +77,15 @@
         }
         textarea {
             height: 100px;
+            resize: none; /* Prevent manual resizing */
+        }
+        .char-counter {
+            font-size: 0.8em;
+            color: #555;
+            align-self: flex-end; /* Align counter to the right */
+            margin-right: calc((294px - 256px) / 2); /* Align with textarea edge */
+            margin-top: -5px; /* Adjust spacing */
+            margin-bottom: 5px; /* Add space before next element */
         }
         #printerImage {
             display: block;
@@ -96,7 +105,7 @@
 <body>
     <h1>Print me a message!</h1>
     <div class="receipt">
-        <input type="text" id="titleInput" placeholder="Enter title here..."> <!-- Added title input -->
+        <input type="text" id="titleInput" placeholder="Enter title here..." maxlength="40"> <!-- Added maxlength -->
         <canvas id="drawingCanvas" width="256" height="256"></canvas>
         <div class="buttons">
             <button id="pencilBtn">✏️</button>
@@ -104,7 +113,8 @@
             <button id="clearBtn">🗑️</button>
         </div>
         <input type="file" id="uploadImage" accept="image/*">
-        <textarea id="message" placeholder="Enter your message here..."></textarea>
+        <textarea id="message" placeholder="Enter your message here..." maxlength="180"></textarea> <!-- Added maxlength -->
+        <span id="messageCharCount" class="char-counter">0 / 180</span> <!-- Added char counter display -->
         <button id="printBtn">Print!</button>
     </div>
     <!-- Replaced img with div -->
@@ -117,12 +127,23 @@
         const eraserBtn = document.getElementById('eraserBtn');
         const clearBtn = document.getElementById('clearBtn');
         const uploadImage = document.getElementById('uploadImage');
-        const titleInput = document.getElementById('titleInput'); // Get title input
+        const titleInput = document.getElementById('titleInput');
         const messageTextarea = document.getElementById('message');
         const printBtn = document.getElementById('printBtn');
+        const messageCharCount = document.getElementById('messageCharCount'); // Get char counter span
+
+        const MESSAGE_MAX_LENGTH = 180; // Define max length constant
 
         let drawing = false;
         let isPencil = true;
+
+        // --- Initialize Character Counter ---
+        function updateMessageCharCount() {
+            const currentLength = messageTextarea.value.length;
+            messageCharCount.textContent = `${currentLength} / ${MESSAGE_MAX_LENGTH}`;
+        }
+        messageTextarea.addEventListener('input', updateMessageCharCount);
+        updateMessageCharCount(); // Initial update on load
 
         // Set initial canvas background
         ctx.fillStyle = '#fff';
@@ -260,11 +281,11 @@
 
         // Print button functionality
         printBtn.addEventListener('click', async () => {
-            const imageDataUrl = canvas.toDataURL('image/png'); // Get canvas as PNG data URL
-            const title = titleInput.value; // Get title value
+            const imageDataUrl = canvas.toDataURL('image/png');
+            const title = titleInput.value;
             const message = messageTextarea.value;
 
-            // Basic validation: Allow printing if there's a title, message, or non-empty canvas
+            // Frontend validation (maxlength attributes handle length)
             const canvasIsEmpty = isCanvasEmpty();
             if (!title && !message && canvasIsEmpty) {
                 alert('Please provide a title, message, or draw something to print.');
@@ -272,7 +293,7 @@
             }
 
             console.log("Sending print request...");
-            printBtn.disabled = true; // Disable button while sending
+            printBtn.disabled = true;
             printBtn.textContent = "Printing...";
 
             try {
@@ -282,7 +303,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        title: title, // Include title in payload
+                        title: title,
                         img: imageDataUrl,
                         msg: message,
                     }),
@@ -290,23 +311,38 @@
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    // Check for FastAPI validation errors
+                    if (response.status === 422 && errorData.detail) {
+                         // Extract specific validation messages if needed, or show generic one
+                         let errorMsg = "Validation error. ";
+                         try {
+                             // Attempt to format FastAPI validation errors
+                             errorMsg += errorData.detail.map(err => `${err.loc[1]}: ${err.msg}`).join('; ');
+                         } catch (e) {
+                             // Fallback for unexpected error format
+                             errorMsg += JSON.stringify(errorData.detail);
+                         }
+                         throw new Error(errorMsg);
+                    } else {
+                        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    }
                 }
 
                 const result = await response.json();
                 console.log('Print request successful:', result);
-                alert('Print job sent successfully!'); // Optional: give user feedback
+                alert('Print job sent successfully!');
 
                 // Optionally clear fields after successful print
                 // titleInput.value = '';
                 // messageTextarea.value = '';
-                // clearBtn.click(); // Simulate clear button click
+                // clearBtn.click();
+                // updateMessageCharCount(); // Reset counter if clearing
 
             } catch (error) {
                 console.error('Error sending print request:', error);
-                alert(`Failed to send print job: ${error.message}`); // Show error to user
+                alert(`Failed to send print job: ${error.message}`);
             } finally {
-                 printBtn.disabled = false; // Re-enable button
+                 printBtn.disabled = false;
                  printBtn.textContent = "Print!";
             }
         });
